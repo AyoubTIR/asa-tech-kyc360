@@ -19,5 +19,3 @@ flowchart TB
     class S,SI,SP,SD sales;
     class E,EI,EP,ED evaluation;
 ```
-
-![Architecture Diagram](documentation/architecture-diagram.png)
