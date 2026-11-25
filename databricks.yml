@@ -1,0 +1,26 @@
+bundle:
+  name: asa-tech-kyc360
+
+include:
+  - infra/*.yml
+
+variables:
+  catalog_name:
+    description: Target Unity Catalog catalog (Free Edition defaults to 'workspace')
+    default: workspace
+  schema_name:
+    description: Target schema for Bronze raw Delta tables and landing volumes
+    default: bronze
+  volume_name:
+    description: Unity Catalog managed volume for raw feedback JSON batches
+    default: raw_feedback
+  table_name:
+    description: Bronze Delta table name for raw customer feedback
+    default: raw_customer_feedback
+  batch_size:
+    description: Number of feedback records generated per run via api_pusher
+    default: "50"
+
+targets:
+  dev:
+    default: true

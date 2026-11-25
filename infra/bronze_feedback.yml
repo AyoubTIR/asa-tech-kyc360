@@ -1,0 +1,29 @@
+resources:
+  schemas:
+    bronze:
+      catalog_name: ${var.catalog_name}
+      name: ${var.schema_name}
+      comment: "Bronze raw ingestion schema for ASA TECH KYC360"
+
+  volumes:
+    raw_feedback:
+      catalog_name: ${var.catalog_name}
+      schema_name: ${resources.schemas.bronze.name}
+      name: ${var.volume_name}
+      volume_type: MANAGED
+      comment: "Raw JSON customer feedback batches from api_pusher"
+
+  jobs:
+    bronze_feedback_ingestion:
+      name: "kyc360-bronze-feedback-ingestion"
+      tasks:
+        - task_key: ingest_bronze_feedback
+          notebook_task:
+            notebook_path: ../scripts/bronze_feedback_ingest.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${resources.schemas.bronze.name}
+              volume_name: ${resources.volumes.raw_feedback.name}
+              table_name: ${var.table_name}
+              batch_size: ${var.batch_size}
+              api_pusher_src: ${workspace.file_path}/scripts/api_pusher/src

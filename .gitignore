@@ -1,0 +1,11 @@
+# Databricks Asset Bundles local state & artifacts
+.databricks/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.log
+.env
