@@ -96,19 +96,6 @@ flowchart TB
     style OPS fill:#f8fafc,stroke:#cbd5e1,color:#0f172a
 ```
 
-## Quick Start — Bronze Feedback Ingestion (Databricks Free Edition)
+## Documentation
 
-Deploy the Unity Catalog schema (`workspace.bronze`), raw landing volume (`raw_feedback`), and serverless Lakeflow job (`kyc360-bronze-feedback-ingestion`) with Databricks Asset Bundles:
-
-```bash
-# 1. Authenticate once with your Databricks Free Edition workspace URL
-databricks auth login --host https://<your-workspace-url>
-
-# 2. Deploy the infrastructure + Lakeflow job
-databricks bundle deploy
-
-# 3. Run the job from CLI (or click "Run now" in Lakeflow Jobs in the Databricks UI)
-databricks bundle run bronze_feedback_ingestion
-```
-
-Each run generates a customer feedback JSON batch via `scripts/api_pusher` (manual mode), writes it to `/Volumes/workspace/bronze/raw_feedback/`, and appends the raw rows to `workspace.bronze.raw_customer_feedback`.
+- [Bronze Layer — Customer Feedback Ingestion](documentation/bronze-layer.md)
