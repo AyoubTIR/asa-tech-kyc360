@@ -4,113 +4,94 @@
 
 ```mermaid
 flowchart TB
-    subgraph SRC["IN · Sources (Course Generator)"]
+    subgraph SRC["01 · Sources"]
         direction LR
-        S["<b>Sales & campaign files</b><br/>CSV · sales.csv + campaign_product.csv"]
-        F["<b>Campaign evaluations</b><br/>JSON batches · EN / FR / HI / ZH / JA"]
+        S["<b>Sales Data Sources</b><br/>CSV / API / operational exports"]
+        F["<b>Customer Feedback Sources</b><br/>JSON / multilingual comments / evaluations"]
     end
 
-    subgraph WS["Databricks Workspace — Managed Storage · Serverless Compute"]
+    subgraph DL["Databricks · Delta Lake"]
         direction TB
 
-        subgraph INTAKE["Intake"]
+        subgraph BRONZE["02 · Ingestion & Storage — Bronze"]
             direction LR
-            APP_IN["<b>KYC360 App · Intake</b><br/>CSV upload + authenticated JSON receiver"]
-            API_IN["<b>POST /api/feedback</b><br/>Accept input → store durably → mark batch ready"]
+            B_SALES["<b>Bronze — Raw Sales Data</b><br/>Raw ingestion into Delta tables"]
+            B_FB["<b>Bronze — Raw Feedback Data</b><br/>Raw comments stored in Delta tables"]
         end
 
-        subgraph LAND["00 · Land — Preserve Inputs"]
-            VOL["<b>Managed Unity Catalog Volume</b><br/>Original CSV + JSON · batch ID · checksum · replayable raw files"]
+        subgraph SILVER["03 · Processing — Silver (PySpark + Delta Upserts)"]
+            direction TB
+            S_SALES["<b>Silver — Sales Processing</b><br/>PySpark · cleaning, validation, joins, KPIs & Delta upserts"]
+            S_FB["<b>Silver — Feedback Processing</b><br/>PySpark · cleaning, validation, language handling & Delta upserts"]
+            SENT["<b>Sentiment Analysis</b><br/>Python / Databricks ML or AI Functions"]
+            S_FB --> SENT
         end
 
-        subgraph BRONZE["01 · Bronze — Raw Delta"]
+        subgraph GOLD["04 · Curated Data — Gold (PySpark + Delta Upserts)"]
             direction LR
-            B_SALES["<b>Raw sales + campaign mapping</b><br/>Source rows + ingestion metadata"]
-            B_FB["<b>Raw customer feedback</b><br/>Original comments + ingestion metadata"]
+            G_SALES["<b>Gold — Sales Mart</b><br/>Revenue, products, countries, trends (Delta upserts)"]
+            G_FB["<b>Gold — Sentiment Mart</b><br/>Sentiment by campaign, product, date (Delta upserts)"]
         end
 
-        subgraph SILVER["02 · Silver — Clean + Enrich"]
-            direction LR
-            S_SALES["<b>Clean sales & reference data</b> (dbt)<br/>Typed dates, amounts, countries · validate campaign-product mapping"]
-            S_FB["<b>Clean & enrich customer feedback</b> (dbt + Python CPU)<br/>Validate records · multilingual sentiment + confidence (cached)"]
+        subgraph SERVING["05 · Serving & Visualization"]
+            direction TB
+            SQL_WH["<b>Databricks SQL Warehouse</b><br/>Fast querying for dashboards and apps"]
+            subgraph APP["Databricks App / Website — Unified Web Interface"]
+                direction LR
+                UI_SALES["<b>Sales Dashboard</b>"]
+                UI_FB["<b>Customer Feedback Dashboard</b>"]
+                UI_PIPE["<b>Run pipeline</b>"]
+            end
+            SQL_WH --> UI_SALES
+            SQL_WH --> UI_FB
+            SQL_WH --> UI_PIPE
         end
 
-        subgraph GOLD["03 · Gold — Business Marts"]
-            direction LR
-            G_SALES["<b>Sales mart</b><br/>Sales amount · units sold · product & country trends"]
-            G_FB["<b>Customer feedback mart</b><br/>Sentiment mix · campaign trends · comment explorer"]
-        end
-
-        subgraph QUERY["04 · Query — SQL Compute"]
-            SQL_WH["<b>Databricks SQL Warehouse (Shared)</b><br/>Executes dbt SQL + serves published Gold data to the app"]
-        end
-
-        subgraph EXP["05 · Experience — KYC360 (Databricks App · Flask)"]
-            direction LR
-            UI_SALES["<b>Sales</b><br/>Products · countries · date trends"]
-            UI_FB["<b>Customer feedback</b><br/>Sentiment · campaigns · comments"]
-            UI_PIPE["<b>Pipeline activity</b><br/>Run status · refresh timestamp · Run pipeline"]
-        end
-
-        APP_IN --> VOL
-        API_IN --> VOL
-        VOL -- "PySpark batch ingestion" --> B_SALES
-        VOL -- "PySpark batch ingestion" --> B_FB
-        B_SALES --> S_SALES
-        B_FB --> S_FB
-        S_SALES -- "dbt models + tests" --> G_SALES
-        S_FB -- "dbt models + tests" --> G_FB
-        S_SALES -. "Resolved campaign mappings" .-> G_FB
-        G_SALES -- "Publish after both marts pass" --> SQL_WH
-        G_FB -- "Publish after both marts pass" --> SQL_WH
-        SQL_WH -- "Query results" --> UI_SALES
-        SQL_WH -- "Query results" --> UI_FB
-        SQL_WH -- "Last published dataset" --> UI_PIPE
+        B_SALES -- "PySpark + upserts" --> S_SALES
+        B_FB -- "PySpark + upserts" --> S_FB
+        S_SALES -- "PySpark + upserts" --> G_SALES
+        SENT -- "PySpark + upserts" --> G_FB
+        G_SALES --> SQL_WH
+        G_FB --> SQL_WH
     end
 
-    subgraph OPS["Orchestration · Governance · Delivery"]
+    subgraph OPS["Orchestration & Governance"]
         direction LR
-        JOBS["<b>Lakeflow Jobs — One Orchestrated Run</b><br/>Controls Bronze → Silver → Gold<br/>1. Ingest Bronze (PySpark)<br/>2. Clean Silver (dbt)<br/>3. Score Feedback (Python · CPU)<br/>4. Build & Test Marts (dbt)<br/>5. Publish Dataset (Success manifest · retries · logs)"]
-        GOV["<b>Data Governance — Unity Catalog</b><br/>• Governed tables, volumes & access<br/>• Quality controls (invalid rows → quarantine)<br/>• Traceable results (batch IDs + model revisions)<br/>• Safe publication (both marts pass before release)"]
-        DELIVERY["<b>Code & Delivery — GitHub + Bundles</b><br/>Notebooks · dbt models · Flask · Job definitions + tests<br/>Free Edition target · on-demand academic demo"]
+        JOBS["<b>Lakeflow Jobs</b><br/>Pipeline orchestration & scheduling"]
+        UC["<b>Unity Catalog</b><br/>Governance, permissions, lineage"]
+        GH["<b>GitHub</b><br/>Version control"]
     end
 
-    S -- "File upload" --> APP_IN
-    F -- "OAuth adapter required" --> API_IN
-    UI_PIPE -. "Run + status · Jobs API" .-> JOBS
+    S --> B_SALES
+    F --> B_FB
+    UI_PIPE -. "Jobs API" .-> JOBS
 
     classDef sourceSales fill:#e8f5ee,stroke:#1b7f5a,color:#133a2c;
     classDef sourceFb fill:#f3effc,stroke:#6d4aff,color:#2d1f66;
-    classDef intake fill:#e6f6f2,stroke:#0d9488,color:#134e4a;
-    classDef land fill:#f1f5f9,stroke:#64748b,color:#1e293b;
     classDef bronze fill:#fcf3e8,stroke:#d99b52,color:#4a2f10;
     classDef silver fill:#eef4fb,stroke:#5b82b8,color:#1b3554;
+    classDef sentiment fill:#f3effc,stroke:#7c3aed,color:#2e1065;
     classDef gold fill:#fdf8e4,stroke:#d4b13f,color:#4a3b0c;
-    classDef query fill:#f1f5f9,stroke:#475569,color:#0f172a;
-    classDef app fill:#0b2530,stroke:#0f766e,color:#f0fdf4;
-    classDef jobs fill:#0b2530,stroke:#14b8a6,color:#f0fdf4;
-    classDef gov fill:#ffffff,stroke:#0d9488,color:#0f172a;
+    classDef warehouse fill:#e6f6f2,stroke:#0d9488,color:#134e4a;
+    classDef appCard fill:#f8fafc,stroke:#0f766e,color:#0f172a;
+    classDef ops fill:#ffffff,stroke:#0d9488,color:#0f172a;
 
     class S sourceSales;
     class F sourceFb;
-    class APP_IN,API_IN intake;
-    class VOL land;
     class B_SALES,B_FB bronze;
     class S_SALES,S_FB silver;
+    class SENT sentiment;
     class G_SALES,G_FB gold;
-    class SQL_WH query;
-    class UI_SALES,UI_FB,UI_PIPE app;
-    class JOBS jobs;
-    class GOV,DELIVERY gov;
+    class SQL_WH warehouse;
+    class UI_SALES,UI_FB,UI_PIPE appCard;
+    class JOBS,UC,GH ops;
 
     style SRC fill:#f8fafc,stroke:#cbd5e1,color:#0f172a
-    style WS fill:#ffffff,stroke:#cbd5e1,color:#0f172a
-    style INTAKE fill:#f8fafc,stroke:#e2e8f0,color:#334155
-    style LAND fill:#f8fafc,stroke:#e2e8f0,color:#334155
+    style DL fill:#ffffff,stroke:#cbd5e1,color:#0f172a
     style BRONZE fill:#fffaf3,stroke:#f3d9b1,color:#7c4a15
     style SILVER fill:#f5f9ff,stroke:#c7dbf4,color:#1e3a5f
     style GOLD fill:#fefcf3,stroke:#f0dfa0,color:#6b5412
-    style QUERY fill:#f8fafc,stroke:#e2e8f0,color:#334155
-    style EXP fill:#0f2d38,stroke:#0f766e,color:#f0fdf4
+    style SERVING fill:#f8fafc,stroke:#e2e8f0,color:#334155
+    style APP fill:#0b2530,stroke:#0f766e,color:#f0fdf4
     style OPS fill:#f8fafc,stroke:#cbd5e1,color:#0f172a
 ```
